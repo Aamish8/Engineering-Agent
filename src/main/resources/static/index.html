@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-slate-950 text-slate-100">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Engineering Agent</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="h-full flex overflow-hidden font-sans antialiased bg-slate-950 text-slate-100">
+
+  <!-- Sidebar -->
+  <aside class="w-80 bg-slate-900 border-r border-slate-800 flex flex-col justify-between p-4 space-y-6 overflow-y-auto">
+    <div class="space-y-6">
+      
+      <!-- Brand & Index Button -->
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-lg bg-red-600 flex items-center justify-center font-bold text-white shadow-md shadow-red-900/30">
+            🤖
+          </div>
+          <span class="font-bold text-sm tracking-wide text-white">Engineering Agent</span>
+        </div>
+        <button onclick="openIndexModal()" class="bg-red-600 hover:bg-red-700 text-white text-xs font-semibold px-3 py-2 rounded-lg transition shadow-md shadow-red-900/20 active:scale-95">
+          + Index Repo
+        </button>
+      </div>
+
+      <!-- Config Form -->
+      <div class="space-y-4">
+        <div>
+          <label class="block text-xs font-medium text-slate-400 mb-1">Session / Conversation ID</label>
+          <input id="conversationId" type="text" value="redis-test-101" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-200 outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500 transition">
+        </div>
+
+        <div>
+          <label class="block text-xs font-medium text-slate-400 mb-1">Active Repository</label>
+          <select id="repoSelect" onchange="onRepoSelectChange()" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-200 outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500 transition text-slate-200">
+            <option value="">-- Select Existing Repo --</option>
+          </select>
+          <!-- Hidden inputs keep existing submission logic intact -->
+          <input id="repoUrl" type="hidden">
+          <input id="localPath" type="hidden">
+        </div>
+      </div>
+
+      <!-- Session Controls -->
+      <div class="pt-2 border-t border-slate-800">
+        <button onclick="clearChatScreen()" class="w-full bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium py-2 rounded-lg transition border border-slate-700 hover:border-red-500/50">
+          Clear Screen
+        </button>
+      </div>
+
+    </div>
+
+    <!-- Active Repo Badge Footer -->
+    <div class="bg-slate-950 border border-red-900/40 rounded-xl p-3 flex items-center gap-3">
+      <div class="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse"></div>
+      <div class="overflow-hidden">
+        <p class="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Active Workspace</p>
+        <p id="activeRepoBadge" class="text-xs font-medium text-red-400 truncate">No Repository Selected</p>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main Chat Area -->
+  <main class="flex-1 flex flex-col bg-slate-950 relative">
+    
+    <!-- Top Header -->
+    <header class="h-14 border-b border-slate-800 flex items-center justify-between px-6 bg-slate-900/50 backdrop-blur-sm">
+      <h1 class="text-sm font-semibold text-white flex items-center gap-2">
+        <span class="text-red-500">●</span> Codebase Intelligence Dashboard
+      </h1>
+    </header>
+
+    <!-- Chat Message Feed -->
+    <div id="chatFeed" class="flex-1 overflow-y-auto p-6 space-y-4">
+      <div class="flex gap-3 max-w-3xl">
+        <div class="w-8 h-8 rounded-lg bg-red-600/20 border border-red-500/30 flex items-center justify-center text-sm">🤖</div>
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 text-xs text-slate-300 leading-relaxed shadow-sm">
+          Hello! Select a repository from the sidebar or click <strong class="text-red-400">+ Index Repo</strong> to start analyzing your project.
+        </div>
+      </div>
+    </div>
+
+    <!-- Input Bar -->
+   <div class="p-4 border-t border-slate-800 bg-slate-900/30">
+  <form onsubmit="handleSend(event)" class="max-w-4xl mx-auto flex gap-3">
+    <input id="userQuery" type="text" placeholder="Ask a question about the repository..." class="flex-1 bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-xs text-slate-100 placeholder-slate-500 outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500 transition">
+    <button type="submit" id="sendBtn" class="bg-red-600 hover:bg-red-700 text-white text-xs font-semibold px-6 py-3 rounded-xl transition shadow-lg shadow-red-900/30 active:scale-95 flex items-center gap-2">
+      <span>Send</span>
+      <span>→</span>
+    </button>
+    <button type="button" id="stopBtn" onclick="stopStream()" class="hidden bg-slate-800 hover:bg-slate-700 text-red-400 text-xs font-semibold px-4 py-3 rounded-xl transition border border-red-900/50">
+      Stop
+    </button>
+  </form>
+</div>
+
+  </main>
+
+  <!-- JavaScript Integration -->
+ <!-- JavaScript Integration -->
+  <script>
+    async function loadExistingRepositories() {
+      try {
+        const res = await fetch('/api/repos');
+        if (!res.ok) return;
+        const repos = await res.json();
+        const select = document.getElementById('repoSelect');
+        
+        select.innerHTML = '<option value="">-- Select Existing Repo --</option>';
+        repos.forEach(repo => {
+          const opt = document.createElement('option');
+          opt.value = repo.id;
+          opt.dataset.url = repo.repoUrl;
+          opt.dataset.path = repo.localPath;
+          opt.text = repo.repoUrl.split('/').pop().replace('.git', '');
+          select.appendChild(opt);
+        });
+      } catch (err) {
+        console.error("Failed to load repositories:", err);
+      }
+    }
+
+    function onRepoSelectChange() {
+      const select = document.getElementById('repoSelect');
+      const selectedOpt = select.options[select.selectedIndex];
+      if (selectedOpt && selectedOpt.value) {
+        document.getElementById('repoUrl').value = selectedOpt.dataset.url;
+        document.getElementById('localPath').value = selectedOpt.dataset.path;
+        document.getElementById('activeRepoBadge').innerText = selectedOpt.text;
+      }
+    }
+
+    function openIndexModal() {
+      const repoUrl = prompt("Enter Git Repository URL to Index:");
+      if (!repoUrl) return;
+      const localPath = prompt("Enter Local Directory Path:");
+      if (!localPath) return;
+
+      fetch(`/api/index?repoUrl=${encodeURIComponent(repoUrl)}&localPath=${encodeURIComponent(localPath)}`, { method: 'POST' })
+        .then(res => {
+          if (res.ok) {
+            alert('Indexing started successfully!');
+            loadExistingRepositories();
+          } else {
+            alert('Failed to trigger indexing.');
+          }
+        })
+        .catch(err => console.error("Index error:", err));
+    }
+
+    function clearChatScreen() {
+      document.getElementById('chatFeed').innerHTML = '';
+    }
+
+    let abortController = null;
+
+    function stopStream() {
+      if (abortController) {
+        abortController.abort();
+        abortController = null;
+        toggleStreamingState(false);
+      }
+    }
+
+    function toggleStreamingState(isStreaming) {
+      document.getElementById('sendBtn').classList.toggle('hidden', isStreaming);
+      document.getElementById('stopBtn').classList.toggle('hidden', !isStreaming);
+    }
+
+    async function handleSend(e) {
+      e.preventDefault();
+      const input = document.getElementById('userQuery');
+      const text = input.value.trim();
+      if (!text) return;
+      
+      const repoUrl = document.getElementById('repoUrl').value;
+      const localPath = document.getElementById('localPath').value;
+      const conversationId = document.getElementById('conversationId').value;
+      
+      if (!repoUrl) {
+        alert('Please select an active repository from the dropdown first!');
+        return;
+      }
+
+      const feed = document.getElementById('chatFeed');
+      feed.innerHTML += `<div class="flex justify-end my-2"><div class="bg-red-600 text-white rounded-2xl px-4 py-2.5 text-xs max-w-xl shadow-md">${text}</div></div>`;
+      input.value = '';
+      feed.scrollTop = feed.scrollHeight;
+
+      const botMsgId = 'bot-msg-' + Date.now();
+      feed.innerHTML += `<div class="flex gap-3 max-w-3xl my-3" id="${botMsgId}"><div class="w-8 h-8 rounded-lg bg-red-600/20 border border-red-500/30 flex items-center justify-center text-sm shrink-0">🤖</div><div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 text-xs text-slate-300 leading-relaxed shadow-sm w-full"><span class="text-slate-500 animate-pulse">Analyzing repository codebase...</span></div></div>`;
+      feed.scrollTop = feed.scrollHeight;
+
+      abortController = new AbortController();
+      toggleStreamingState(true);
+
+      try {
+        const response = await fetch(`/agent/stream?repoUrl=${encodeURIComponent(repoUrl)}&conversationId=${encodeURIComponent(conversationId)}&question=${encodeURIComponent(text)}&localPath=${encodeURIComponent(localPath)}`, {
+          signal: abortController.signal
+        });
+        
+        const botBubble = document.querySelector(`#${botMsgId} div:nth-child(2)`);
+        
+        if (response.ok) {
+          botBubble.innerHTML = '';
+          const reader = response.body.getReader();
+          const decoder = new TextDecoder();
+          
+          while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            botBubble.innerHTML += decoder.decode(value, { stream: true });
+            feed.scrollTop = feed.scrollHeight;
+          }
+        } else {
+          botBubble.innerHTML = '<span class="text-red-400">Error: Failed to get response.</span>';
+        }
+      } catch (err) {
+        const botBubble = document.querySelector(`#${botMsgId} div:nth-child(2)`);
+        if (err.name === 'AbortError') {
+          botBubble.innerHTML += '<br><span class="text-amber-400 italic">[Response stopped by user]</span>';
+        } else {
+          botBubble.innerHTML = '<span class="text-red-400">Network error connecting to backend agent.</span>';
+        }
+      } finally {
+        abortController = null;
+        toggleStreamingState(false);
+        feed.scrollTop = feed.scrollHeight;
+      }
+    }
+
+    window.onload = loadExistingRepositories;
+  </script>
+</body>
+</html>
